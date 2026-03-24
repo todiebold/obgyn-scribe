@@ -233,7 +233,7 @@ body{
 
     <div class="field">
       <div class="field-label">Visit Date</div>
-      <input class="field-input" type="date" id="visitDate" tabindex="1"/>
+      <input class="field-input" type="date" id="visitDate" tabindex="1" onchange="document.getElementById('patientName').focus()"/>
     </div>
     <div class="field">
       <div class="field-label">Patient Name</div>
@@ -255,13 +255,13 @@ body{
 
     <div class="sec">Visit Type</div>
     <div class="vlist" id="visitGrid">
-      <div class="vcard" data-val="GYN – New Patient"><span class="drag-handle">⠿</span><span class="vcard-emoji">🩺</span><span class="vcard-text">GYN – New Patient</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="GYN – Return Patient"><span class="drag-handle">⠿</span><span class="vcard-emoji">🔄</span><span class="vcard-text">GYN – Return Patient</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="GYN – Procedure Visit"><span class="drag-handle">⠿</span><span class="vcard-emoji">⚕️</span><span class="vcard-text">GYN – Procedure Visit</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="OB – Return Prenatal"><span class="drag-handle">⠿</span><span class="vcard-emoji">📅</span><span class="vcard-text">OB – Return Prenatal</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="OB – New OB Visit"><span class="drag-handle">⠿</span><span class="vcard-emoji">🤰</span><span class="vcard-text">OB – New Visit</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="OB – Postpartum"><span class="drag-handle">⠿</span><span class="vcard-emoji">👶</span><span class="vcard-text">OB – Postpartum</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="OB – Inpatient/Laborist"><span class="drag-handle">⠿</span><span class="vcard-emoji">🏥</span><span class="vcard-text">OB – Inpatient / Laborist</span><span class="vcard-check">✓</span></div>
+      <button class="vcard" data-val="GYN – New Patient"><span class="drag-handle">⠿</span><span class="vcard-emoji">🩺</span><span class="vcard-text">GYN – New Patient</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="GYN – Return Patient"><span class="drag-handle">⠿</span><span class="vcard-emoji">🔄</span><span class="vcard-text">GYN – Return Patient</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="GYN – Procedure Visit"><span class="drag-handle">⠿</span><span class="vcard-emoji">⚕️</span><span class="vcard-text">GYN – Procedure Visit</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="OB – Return Prenatal"><span class="drag-handle">⠿</span><span class="vcard-emoji">📅</span><span class="vcard-text">OB – Return Prenatal</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="OB – New OB Visit"><span class="drag-handle">⠿</span><span class="vcard-emoji">🤰</span><span class="vcard-text">OB – New Visit</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="OB – Postpartum"><span class="drag-handle">⠿</span><span class="vcard-emoji">👶</span><span class="vcard-text">OB – Postpartum</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="OB – Inpatient/Laborist"><span class="drag-handle">⠿</span><span class="vcard-emoji">🏥</span><span class="vcard-text">OB – Inpatient / Laborist</span><span class="vcard-check">✓</span></button>
     </div>
 
     <div id="homeErr" class="err"></div>
@@ -623,18 +623,12 @@ function initDobFormat(){
 
 function initVcards(){
   document.querySelectorAll('.vcard').forEach(function(c){
-    // Handle both click (desktop) and touchend (mobile)
-    function selectCard(e){
+    c.addEventListener('click',function(e){
       if(e.target.classList.contains('drag-handle'))return;
-      // Don't select if we just finished a drag
-      if(c.classList.contains('dragging'))return;
-      e.preventDefault();
       document.querySelectorAll('.vcard').forEach(function(x){x.classList.remove('sel');});
       c.classList.add('sel');
       S.visitType=c.dataset.val;
-    }
-    c.addEventListener('click',selectCard);
-    c.addEventListener('touchend',selectCard,{passive:false});
+    });
   });
 }
 
