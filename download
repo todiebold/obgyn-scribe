@@ -1,0 +1,20 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local config — never commit API keys
+config.local.js
+secrets.js
+
+# Node (if ever used for tooling)
+node_modules/
+npm-debug.log
+
+# Logs
+*.log
