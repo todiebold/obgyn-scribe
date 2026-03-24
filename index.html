@@ -232,36 +232,36 @@ body{
     <div class="sec">New Encounter</div>
 
     <div class="field">
+      <div class="field-label">Visit Date</div>
+      <input class="field-input" type="date" id="visitDate" tabindex="1"/>
+    </div>
+    <div class="field">
       <div class="field-label">Patient Name</div>
-      <input class="field-input" type="text" id="patientName" placeholder="Last, First" autocomplete="off" tabindex="1"/>
+      <input class="field-input" type="text" id="patientName" placeholder="Last, First" autocomplete="off" tabindex="2"/>
     </div>
     <div class="field">
       <div class="field-label">MRN</div>
-      <input class="field-input" type="text" id="mrn" placeholder="e.g. 1234567" autocomplete="off" inputmode="numeric" tabindex="2"/>
+      <input class="field-input" type="text" id="mrn" placeholder="e.g. 1234567" autocomplete="off" inputmode="numeric" tabindex="3"/>
+    </div>
+    <div class="field">
+      <div class="field-label">Patient Age (yrs) <span style="font-size:2.5vw;color:#9880cc;font-weight:400">(optional)</span></div>
+      <input class="field-input" type="number" id="patientAge" placeholder="Optional" min="0" max="99" inputmode="numeric" tabindex="4"/>
     </div>
     <div class="field">
       <div class="field-label">Date of Birth <span style="font-size:2.5vw;color:#9880cc;font-weight:400">(optional)</span></div>
-      <input class="field-input" type="text" id="dob" placeholder="MM/DD/YYYY" inputmode="numeric" tabindex="3" autocomplete="off"/>
-    </div>
-    <div class="field">
-      <div class="field-label">Visit Date</div>
-      <input class="field-input" type="date" id="visitDate" tabindex="4"/>
-    </div>
-    <div class="field">
-      <div class="field-label">Patient Age (yrs)</div>
-      <input class="field-input" type="number" id="patientAge" placeholder="Optional" min="0" max="99" inputmode="numeric" tabindex="5"/>
+      <input class="field-input" type="text" id="dob" placeholder="MM/DD/YYYY" inputmode="numeric" tabindex="5" autocomplete="off" id="dob"/>
     </div>
     <input type="hidden" id="gestWeeks" value=""/>
 
     <div class="sec">Visit Type</div>
     <div class="vlist" id="visitGrid">
-      <div class="vcard" data-val="OB – New OB Visit"><span class="drag-handle">⠿</span><span class="vcard-emoji">🤰</span><span class="vcard-text">OB – New Visit</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="OB – Return Prenatal"><span class="drag-handle">⠿</span><span class="vcard-emoji">📅</span><span class="vcard-text">OB – Return Prenatal</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="OB – Postpartum"><span class="drag-handle">⠿</span><span class="vcard-emoji">👶</span><span class="vcard-text">OB – Postpartum</span><span class="vcard-check">✓</span></div>
-      <div class="vcard" data-val="OB – Inpatient/Laborist"><span class="drag-handle">⠿</span><span class="vcard-emoji">🏥</span><span class="vcard-text">OB – Inpatient / Laborist</span><span class="vcard-check">✓</span></div>
       <div class="vcard" data-val="GYN – New Patient"><span class="drag-handle">⠿</span><span class="vcard-emoji">🩺</span><span class="vcard-text">GYN – New Patient</span><span class="vcard-check">✓</span></div>
       <div class="vcard" data-val="GYN – Return Patient"><span class="drag-handle">⠿</span><span class="vcard-emoji">🔄</span><span class="vcard-text">GYN – Return Patient</span><span class="vcard-check">✓</span></div>
       <div class="vcard" data-val="GYN – Procedure Visit"><span class="drag-handle">⠿</span><span class="vcard-emoji">⚕️</span><span class="vcard-text">GYN – Procedure Visit</span><span class="vcard-check">✓</span></div>
+      <div class="vcard" data-val="OB – Return Prenatal"><span class="drag-handle">⠿</span><span class="vcard-emoji">📅</span><span class="vcard-text">OB – Return Prenatal</span><span class="vcard-check">✓</span></div>
+      <div class="vcard" data-val="OB – New OB Visit"><span class="drag-handle">⠿</span><span class="vcard-emoji">🤰</span><span class="vcard-text">OB – New Visit</span><span class="vcard-check">✓</span></div>
+      <div class="vcard" data-val="OB – Postpartum"><span class="drag-handle">⠿</span><span class="vcard-emoji">👶</span><span class="vcard-text">OB – Postpartum</span><span class="vcard-check">✓</span></div>
+      <div class="vcard" data-val="OB – Inpatient/Laborist"><span class="drag-handle">⠿</span><span class="vcard-emoji">🏥</span><span class="vcard-text">OB – Inpatient / Laborist</span><span class="vcard-check">✓</span></div>
     </div>
 
     <div id="homeErr" class="err"></div>
@@ -420,6 +420,7 @@ window.onload=function(){
   gasGet('getRecentNotes').then(renderRecent).catch(function(){});
   initVcards();
   initDragSort();
+  initDobFormat();
 };
 
 function renderRecent(notes){
@@ -599,6 +600,26 @@ function saveToDrive(){
 }
 
 function showErr(id,msg){var e=document.getElementById(id);e.style.display='block';e.textContent=msg;}
+
+function initDobFormat(){
+  var dob=document.getElementById('dob');
+  if(!dob)return;
+  dob.addEventListener('input',function(e){
+    // Strip non-digits
+    var val=dob.value.replace(/\D/g,'');
+    // Auto-insert slashes at positions 2 and 4
+    if(val.length>4) val=val.slice(0,2)+'/'+val.slice(2,4)+'/'+val.slice(4,8);
+    else if(val.length>2) val=val.slice(0,2)+'/'+val.slice(2);
+    dob.value=val;
+  });
+  // Allow backspace to work naturally
+  dob.addEventListener('keydown',function(e){
+    if(e.key==='Backspace'&&dob.value.slice(-1)==='/'){
+      e.preventDefault();
+      dob.value=dob.value.slice(0,-1);
+    }
+  });
+}
 
 function initVcards(){
   document.querySelectorAll('.vcard').forEach(function(c){
