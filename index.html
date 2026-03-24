@@ -623,11 +623,18 @@ function initDobFormat(){
 
 function initVcards(){
   document.querySelectorAll('.vcard').forEach(function(c){
-    c.addEventListener('click',function(e){
+    // Handle both click (desktop) and touchend (mobile)
+    function selectCard(e){
       if(e.target.classList.contains('drag-handle'))return;
+      // Don't select if we just finished a drag
+      if(c.classList.contains('dragging'))return;
+      e.preventDefault();
       document.querySelectorAll('.vcard').forEach(function(x){x.classList.remove('sel');});
-      c.classList.add('sel');S.visitType=c.dataset.val;
-    });
+      c.classList.add('sel');
+      S.visitType=c.dataset.val;
+    }
+    c.addEventListener('click',selectCard);
+    c.addEventListener('touchend',selectCard,{passive:false});
   });
 }
 
