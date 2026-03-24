@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="pragma" content="no-cache">
+<meta http-equiv="expires" content="0">
+<!-- v27 -->
+<link rel="manifest" href="/obgyn-scribe/manifest.json">
+<link rel="apple-touch-icon" href="/obgyn-scribe/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="OBGYNScribe">
+<meta name="theme-color" content="#4B1F7C">
+<script>
+(function(){
+  var m=document.createElement('meta');
+  m.name='viewport';
+  m.content='width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no';
+  document.head.appendChild(m);
+
+  // Request mic permission early so Chrome prompts the user
+  // rather than silently blocking inside the GAS iframe
+  if(navigator.permissions){
+    navigator.permissions.query({name:'microphone'}).then(function(result){
+      if(result.state==='prompt' || result.state==='denied'){
+        navigator.mediaDevices.getUserMedia({audio:true})
+          .then(function(stream){
+            // Permission granted — stop the stream immediately, we just needed the prompt
+            stream.getTracks().forEach(function(t){t.stop();});
+          })
+          .catch(function(){});
+      }
+    }).catch(function(){
+      // Fallback: just try to get mic access directly
+      navigator.mediaDevices && navigator.mediaDevices.getUserMedia({audio:true})
+        .then(function(stream){stream.getTracks().forEach(function(t){t.stop();});})
+        .catch(function(){});
+    });
+  } else if(navigator.mediaDevices){
+    navigator.mediaDevices.getUserMedia({audio:true})
+      .then(function(stream){stream.getTracks().forEach(function(t){t.stop();});})
+      .catch(function(){});
+  }
+  // Register service worker for PWA
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('/obgyn-scribe/service-worker.js')
+        .then(function(reg){ console.log('SW registered'); })
+        .catch(function(err){ console.log('SW failed:', err); });
+    });
+  }
+})();
+</script>
+<title>OB/GYN Scribe</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* ── CORE RESET ── */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;word-break:break-word}
+
+html{
+  /* Force the html element to exactly match device screen width */
+  width:100%;
+  min-height:100%;
+}
+body{
+  width:100%;
+  min-height:100vh;
+  overflow-x:hidden;
+  background:#f0eef8;
+  color:#1a1030;
+  font-family:'Inter',sans-serif;
+  /* vw-based font scales perfectly with any screen width */
+  font-size:4vw;
+  -webkit-text-size-adjust:none;
+  text-size-adjust:none;
+}
+
+.screen{display:none;flex-direction:column;min-height:100vh;width:100%;overflow-x:hidden}
+.screen.active{display:flex}
+
+/* ── HEADER — full bleed background, padded content ── */
+.hdr{background:#4B1F7C;padding:3vw 4vw;display:flex;justify-content:space-between;align-items:center;width:100%;flex-shrink:0;box-shadow:0 1vw 3vw rgba(75,31,124,0.3)}
+.hdr-inner{display:flex;justify-content:space-between;align-items:center;width:100%}
+.hdr-left{display:flex;align-items:center;gap:2vw;min-width:0;flex:1;overflow:hidden}
+.hdr-gem{font-size:5vw;line-height:1;flex-shrink:0}
+.hdr-titles{min-width:0;overflow:hidden}
+.hdr-title{font-size:4.5vw;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-sub{font-size:2.5vw;color:rgba(255,255,255,0.55);font-family:'DM Mono',monospace;letter-spacing:0.3vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-email{font-size:2.8vw;font-weight:600;color:#fff;background:rgba(255,255,255,0.15);border:0.4vw solid rgba(255,255,255,0.25);border-radius:5vw;padding:1vw 2.5vw;flex-shrink:0;margin-left:2vw;max-width:35vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── PAGE BODY ── */
+.body{padding:4vw 5vw 20vw;display:flex;flex-direction:column;gap:3.5vw;flex:1;background:#f0eef8;width:100%}
+
+/* ── HIPAA ── */
+.hipaa{background:#fff;border-left:1.2vw solid #952878;border-radius:0 2.5vw 2.5vw 0;padding:2.5vw 3vw;display:flex;gap:2vw;align-items:flex-start;width:100%;box-shadow:0 0.3vw 1vw rgba(0,0,0,0.07)}
+.hipaa-icon{font-size:3.5vw;flex-shrink:0;margin-top:0.3vw}
+.hipaa-text{font-size:2.8vw;color:#5a2060;line-height:1.5;font-weight:500;min-width:0}
+
+/* ── SECTION LABEL ── */
+.sec{font-size:2.8vw;font-weight:700;letter-spacing:0.4vw;color:#6941A8;text-transform:uppercase;font-family:'DM Mono',monospace;padding-bottom:1vw;border-bottom:0.5vw solid #ddd6f0;width:100%}
+
+/* ── FIELDS ── */
+.field{display:flex;flex-direction:column;gap:1.5vw;width:100%}
+.field-label{font-size:3.5vw;font-weight:700;color:#2a1050}
+.field-input{
+  background:#fff;border:0.5vw solid #ccc4e8;border-radius:2.5vw;
+  padding:3vw 3.5vw;color:#1a1030;font-size:4vw;font-weight:500;
+  font-family:'Inter',sans-serif;width:100%;outline:none;
+  -webkit-appearance:none;min-height:13vw;
+  transition:border-color 0.15s,box-shadow 0.15s;
+  box-shadow:0 0.3vw 1vw rgba(0,0,0,0.05);
+}
+.field-input:focus{border-color:#6941A8;box-shadow:0 0 0 0.8vw rgba(105,65,168,0.1)}
+.field-input::placeholder{color:#b8a8d0;font-weight:400}
+.half{display:grid;grid-template-columns:1fr 1fr;gap:3vw;width:100%}
+
+/* ── VISIT CARDS ── */
+.vlist{display:flex;flex-direction:column;gap:2vw;width:100%}
+.vcard{background:#fff;border:0.5vw solid #ccc4e8;border-radius:3vw;padding:3vw 3.5vw;display:flex;align-items:center;gap:3vw;cursor:pointer;width:100%;min-height:13vw;font-family:'Inter',sans-serif;transition:all 0.12s;box-shadow:0 0.3vw 1vw rgba(0,0,0,0.04);text-align:left}
+.vcard:active{opacity:0.75}
+.vcard.sel{background:#ede8fa;border-color:#6941A8;box-shadow:0 0 0 0.4vw #6941A8,0 0.5vw 2vw rgba(105,65,168,0.12)}
+.vcard-emoji{font-size:5vw;flex-shrink:0;line-height:1}
+.vcard-text{font-size:3.5vw;font-weight:600;color:#2a1050;flex:1;min-width:0}
+.vcard.sel .vcard-text{color:#4B1F7C}
+.vcard-check{width:5.5vw;height:5.5vw;border-radius:50%;flex-shrink:0;border:0.5vw solid #c4b0e0;background:#f5f2fc;display:flex;align-items:center;justify-content:center;font-size:3vw;color:transparent;transition:all 0.12s}
+.vcard.sel .vcard-check{background:#6941A8;border-color:#6941A8;color:#fff}
+
+/* ── BUTTONS ── */
+.btn-primary{background:#6941A8;border:none;border-radius:3vw;padding:3.5vw;min-height:13vw;width:100%;color:#fff;font-size:4vw;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:2vw;box-shadow:0 1vw 3vw rgba(105,65,168,0.28);transition:opacity 0.15s}
+.btn-primary:disabled{opacity:0.3;cursor:not-allowed;box-shadow:none}
+.btn-primary:active:not(:disabled){opacity:0.85}
+.btn-out{background:#fff;border:0.5vw solid #ccc4e8;border-radius:3vw;padding:3vw;min-height:13vw;color:#4B1F7C;font-size:3.8vw;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;width:100%;transition:all 0.12s}
+.btn-out:active{background:#ede8fa}
+.btn-back{background:rgba(255,255,255,0.15);border:0.4vw solid rgba(255,255,255,0.28);border-radius:2vw;padding:2vw 3.5vw;min-height:10vw;color:#fff;font-size:3.5vw;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.btn-copy{background:#fff;border:0.5vw solid #ccc4e8;border-radius:3vw;padding:3vw;min-height:13vw;width:100%;color:#6941A8;font-size:3.8vw;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;transition:all 0.15s}
+.btn-copy.done{background:#eaf5f0;border-color:#3D9B6E;color:#3D9B6E}
+.btn-drive{background:#fff;border:0.5vw solid #b8d4f0;border-radius:3vw;padding:3vw;min-height:13vw;width:100%;color:#1a5090;font-size:3.8vw;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer}
+
+/* ── ERRORS ── */
+.err{background:#fff5f5;border:0.5vw solid #e05050;border-radius:2.5vw;padding:3vw;color:#a02020;font-size:3.2vw;font-weight:500;display:none;width:100%}
+.err-full{background:#fff5f5;border:0.5vw solid #e05050;border-radius:2.5vw;padding:3vw;color:#a02020;font-size:3.2vw;font-weight:500;display:none;width:100%}
+
+/* ── RECENT NOTES ── */
+.rnote{background:#fff;border:0.5vw solid #ddd6f0;border-radius:3vw;padding:3vw 3.5vw;display:flex;justify-content:space-between;align-items:center;text-decoration:none;margin-bottom:2vw;width:100%}
+.rnote-title{font-size:3.2vw;font-weight:600;color:#2a1050;line-height:1.4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rnote-date{font-size:2.8vw;color:#9880cc;white-space:nowrap;margin-left:2vw;flex-shrink:0}
+.rnote-arr{font-size:4.5vw;color:#9880cc;flex-shrink:0;margin-left:1.5vw}
+.empty-state{font-size:3.2vw;color:#b0a0c8;text-align:center;padding:4vw;font-weight:500}
+
+/* ── RECORDING ── */
+.rec-hdr{background:#4B1F7C;padding:3vw 4vw;width:100%;flex-shrink:0;box-shadow:0 1vw 3vw rgba(75,31,124,0.3)}
+.rec-hdr-inner{display:flex;justify-content:space-between;align-items:center;width:100%;gap:3vw}
+.visit-pill{background:rgba(255,255,255,0.18);border:0.4vw solid rgba(255,255,255,0.28);border-radius:5vw;padding:1.5vw 3vw;font-size:3vw;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.pt-strip{background:#fff;border-bottom:0.5vw solid #ddd6f0;padding:2.5vw 4vw;display:flex;flex-wrap:wrap;gap:1.5vw;width:100%}
+.pt-tag{font-size:3vw;font-weight:600;color:#4B1F7C;background:#ede8fa;border-radius:1.5vw;padding:1vw 2vw;white-space:nowrap}
+.orb-wrap{position:relative;display:flex;justify-content:center;align-items:center;height:28vw;background:#fff;width:100%;flex-shrink:0}
+.orb{width:22vw;height:22vw;border-radius:50%;background:#ede8fa;border:0.8vw solid #ccc4e8;display:flex;align-items:center;justify-content:center;font-size:9vw;cursor:pointer;z-index:2;transition:all 0.3s;user-select:none}
+.orb.on{background:radial-gradient(circle,#6941A8,#4B1F7C);border-color:#9b6ef3;animation:orbglow 2s ease-in-out infinite}
+.pring{position:absolute;width:22vw;height:22vw;border-radius:50%;background:rgba(105,65,168,0.12);animation:pexpand 2s ease-out infinite}
+.pring:nth-child(2){animation-delay:.6s}.pring:nth-child(3){animation-delay:1.2s}
+@keyframes orbglow{0%,100%{box-shadow:0 0 5vw rgba(105,65,168,0.35)}50%{box-shadow:0 0 10vw rgba(105,65,168,0.55)}}
+@keyframes pexpand{0%{transform:scale(1);opacity:.4}100%{transform:scale(2.6);opacity:0}}
+.timer{text-align:center;font-family:'DM Mono',monospace;font-size:11vw;font-weight:500;color:#4B1F7C;letter-spacing:1vw;padding:2vw 4vw 0;background:#fff;width:100%}
+.rec-status{text-align:center;font-size:3.2vw;font-weight:600;color:#9880cc;padding:1vw 4vw 2.5vw;background:#fff;width:100%}
+.tx-wrap{background:#fff;border-top:0.5vw solid #ddd6f0;border-bottom:0.5vw solid #ddd6f0;padding:3vw 4vw;flex:1;width:100%}
+.tx-label{font-size:2.5vw;font-family:'DM Mono',monospace;letter-spacing:0.5vw;color:#9880cc;margin-bottom:2vw;font-weight:600;text-transform:uppercase}
+.tx-scroll{font-size:3.5vw;line-height:1.7;color:#2a1050;max-height:35vw;overflow-y:auto;min-height:15vw;width:100%}
+.tx-interim{color:#9880cc;font-style:italic}.tx-ph{color:#c4b0d8;font-style:italic}
+.rec-btns{padding:3vw 4vw;background:#f0eef8;display:grid;grid-template-columns:1fr 1.5fr;gap:2.5vw;width:100%}
+.btn-clear{background:none;border:none;color:#b0a0c8;font-size:3vw;cursor:pointer;text-align:center;text-decoration:underline;padding:1.5vw;font-family:'Inter',sans-serif;width:100%}
+
+/* ── PROCESSING ── */
+#screen-proc{justify-content:center;align-items:center;gap:5vw;padding:10vw 6vw;background:#fff;width:100%}
+.proc-spin{font-size:14vw;animation:spin 3s linear infinite;color:#6941A8}
+@keyframes spin{to{transform:rotate(360deg)}}
+.proc-title{font-size:5.5vw;font-weight:800;color:#4B1F7C;text-align:center}
+.proc-steps{display:flex;flex-direction:column;gap:3.5vw;width:100%}
+.proc-step{font-size:3.5vw;font-weight:500;color:#9880cc;display:flex;align-items:center;gap:2.5vw;opacity:0;animation:fadeup .5s ease forwards}
+.proc-step:nth-child(1){animation-delay:.3s}.proc-step:nth-child(2){animation-delay:.9s}.proc-step:nth-child(3){animation-delay:1.5s}.proc-step:nth-child(4){animation-delay:2.1s}
+.proc-dot{color:#6941A8;font-size:4vw}
+@keyframes fadeup{from{opacity:0;transform:translateY(2vw)}to{opacity:1;transform:none}}
+
+/* ── RESULTS ── */
+.res-hdr{background:#4B1F7C;padding:3vw 4vw;width:100%;flex-shrink:0;box-shadow:0 1vw 3vw rgba(75,31,124,0.3)}
+.res-hdr-inner{display:flex;justify-content:space-between;align-items:center;width:100%}
+.res-title{font-size:5vw;font-weight:800;color:#fff}
+.res-sub{font-size:2.8vw;color:rgba(255,255,255,0.6);margin-top:0.5vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res-body{padding:4vw 5vw 20vw;display:flex;flex-direction:column;gap:3.5vw;background:#f0eef8;width:100%}
+
+.em-card{background:linear-gradient(135deg,#4B1F7C,#6941A8);border-radius:3.5vw;padding:4vw;display:flex;justify-content:space-between;align-items:center;width:100%;box-shadow:0 1vw 4vw rgba(75,31,124,0.2)}
+.em-num{font-family:'DM Mono',monospace;font-size:9vw;font-weight:500;color:#fff;line-height:1}
+.em-desc{font-size:3.2vw;font-weight:600;color:rgba(255,255,255,0.75);margin-top:1.5vw}
+.em-tags{display:flex;flex-direction:column;gap:1.5vw;align-items:flex-end;flex-shrink:0}
+.tag{font-size:2.8vw;font-weight:700;padding:1.2vw 2.5vw;border-radius:5vw;border:0.4vw solid;white-space:nowrap}
+.tag-r{color:#f0c060;border-color:rgba(240,192,96,0.4);background:rgba(240,192,96,0.12)}
+.tag-m{color:#3D9B6E;border-color:rgba(61,155,110,0.4);background:rgba(61,155,110,0.12)}
+
+.tabs{background:#fff;border-radius:3vw;padding:1vw;display:flex;gap:0.8vw;width:100%;box-shadow:0 0.3vw 1vw rgba(0,0,0,0.07)}
+.tab{flex:1;background:none;border:none;border-radius:2.5vw;padding:3vw 1vw;min-height:11vw;color:#9880cc;font-size:2.8vw;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s}
+.tab.on{background:#6941A8;color:#fff;box-shadow:0 0.5vw 1.5vw rgba(105,65,168,0.22)}
+
+.panel{display:none;flex-direction:column;gap:3vw;width:100%}
+.panel.on{display:flex}
+
+.nblock{background:#fff;border-radius:3vw;padding:3.5vw;width:100%;border-left:1vw solid #6941A8;box-shadow:0 0.3vw 1vw rgba(0,0,0,0.05)}
+.nblock-lbl{font-size:2.5vw;font-family:'DM Mono',monospace;letter-spacing:0.5vw;color:#9880cc;margin-bottom:2vw;font-weight:600;text-transform:uppercase}
+.nblock-body{font-size:3.5vw;color:#2a1050;line-height:1.65}
+.mdm-grid{background:#fff;border-radius:3vw;overflow:hidden;width:100%;box-shadow:0 0.3vw 1vw rgba(0,0,0,0.05)}
+.mdm-row{padding:3vw 3.5vw;border-bottom:0.3vw solid #ede8f8}
+.mdm-row:last-child{border-bottom:none}
+.mdm-k{font-size:2.5vw;font-family:'DM Mono',monospace;color:#9880cc;letter-spacing:0.4vw;margin-bottom:1vw;font-weight:600;text-transform:uppercase}
+.mdm-v{font-size:3.5vw;color:#2a1050;font-weight:600}
+.chip{background:#f0faf5;border:0.4vw solid #a8dcc0;border-radius:2.5vw;padding:2.5vw 3vw;font-size:3.2vw;font-weight:600;color:#2a7050;font-family:'DM Mono',monospace;width:100%}
+.tip{font-size:3.2vw;color:#2a5030;line-height:1.55;padding:1vw 0;font-weight:500}
+.tip::before{content:"→ ";color:#3D9B6E;font-weight:700}
+.dot-box{background:#fff;border:0.5vw solid #ddd6f0;border-radius:3vw;padding:3.5vw;max-height:70vw;overflow-y:auto;width:100%}
+.dot-txt{font-family:'DM Mono',monospace;font-size:3vw;color:#3a2060;line-height:1.75;white-space:pre-wrap}
+.divider{border:none;border-top:0.5vw solid #ddd6f0;width:100%}
+.drive-saved{background:#eaf6f0;border:0.5vw solid #3D9B6E;border-radius:3vw;padding:3vw 3.5vw;color:#2a7050;font-size:3.2vw;font-weight:600;display:flex;align-items:center;justify-content:space-between;text-decoration:none;width:100%}
+.phi-box{background:#fff5fa;border:0.5vw solid #952878;border-radius:3vw;padding:3.5vw;width:100%}
+.phi-title{font-size:3.2vw;font-weight:700;color:#952878;margin-bottom:2vw}
+.phi-item{font-size:3vw;color:#7a2060;padding:0.8vw 0;font-weight:500}
+.enc-opt{display:block;width:100%;padding:3vw 4vw;background:none;border:none;border-bottom:0.3vw solid #ede8f8;text-align:left;font-size:3.5vw;font-weight:500;color:#2a1050;cursor:pointer;font-family:Inter,sans-serif}
+.enc-opt:last-child{border-bottom:none}
+.enc-opt:active{background:#f0eafa}
+</style>
+</head>
+<body>
+
+<!-- ══ HOME ══ -->
+<div id="screen-home" class="screen active">
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="hdr-gem">✦</div>
+      <div>
+        <div class="hdr-title">OB/GYN Scribe</div>
+        <div class="hdr-sub">SIU Medicine · Ambient Documentation</div>
+      </div>
+    </div>
+    <div class="hdr-email" id="userEmail">Loading…</div>
+  </div>
+
+  <div class="body">
+    <div class="hipaa">
+      <div class="hipaa-icon">⚠️</div>
+      <div class="hipaa-text">No PHI is sent to AI — identifiers are stripped before processing. Confirm your Google Workspace BAA is active before storing real patient data.</div>
+    </div>
+
+    <div class="sec">New Encounter</div>
+
+    <div class="field">
+      <div class="field-label">Visit Date</div>
+      <input class="field-input" type="date" id="visitDate" tabindex="1" onchange="document.getElementById('patientName').focus()"/>
+    </div>
+    <div class="field">
+      <div class="field-label">Patient Name</div>
+      <input class="field-input" type="text" id="patientName" placeholder="Last, First" autocomplete="off" tabindex="2"/>
+    </div>
+    <div class="field">
+      <div class="field-label">MRN</div>
+      <input class="field-input" type="text" id="mrn" placeholder="e.g. 1234567" autocomplete="off" inputmode="numeric" tabindex="3"/>
+    </div>
+    <div class="field">
+      <div class="field-label">Patient Age (yrs) <span style="font-size:2.5vw;color:#9880cc;font-weight:400">(optional)</span></div>
+      <input class="field-input" type="number" id="patientAge" placeholder="Optional" min="0" max="99" inputmode="numeric" tabindex="4"/>
+    </div>
+    <div class="field">
+      <div class="field-label">Date of Birth <span style="font-size:2.5vw;color:#9880cc;font-weight:400">(optional)</span></div>
+      <input class="field-input" type="text" id="dob" placeholder="MM/DD/YYYY" inputmode="numeric" tabindex="5" autocomplete="off" oninput="formatDob(this)" onkeydown="dobBackspace(event,this)"/>
+    </div>
+    <input type="hidden" id="gestWeeks" value=""/>
+
+    <div class="sec">Visit Type</div>
+    <div class="vlist" id="visitGrid">
+      <button class="vcard" data-val="GYN – New Patient" onclick="selectVisit(this)"><span class="vcard-emoji">🩺</span><span class="vcard-text">GYN – New Patient</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="GYN – Return Patient" onclick="selectVisit(this)"><span class="vcard-emoji">🔄</span><span class="vcard-text">GYN – Return Patient</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="GYN – Procedure Visit" onclick="selectVisit(this)"><span class="vcard-emoji">⚕️</span><span class="vcard-text">GYN – Procedure Visit</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="OB – Return Prenatal" onclick="selectVisit(this)"><span class="vcard-emoji">📅</span><span class="vcard-text">OB – Return Prenatal</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="OB – New OB Visit" onclick="selectVisit(this)"><span class="vcard-emoji">🤰</span><span class="vcard-text">OB – New Visit</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="OB – Postpartum" onclick="selectVisit(this)"><span class="vcard-emoji">👶</span><span class="vcard-text">OB – Postpartum</span><span class="vcard-check">✓</span></button>
+      <button class="vcard" data-val="OB – Inpatient/Laborist" onclick="selectVisit(this)"><span class="vcard-emoji">🏥</span><span class="vcard-text">OB – Inpatient / Laborist</span><span class="vcard-check">✓</span></button>
+    </div>
+
+    <div id="homeErr" class="err"></div>
+    <button class="btn-primary" id="btnStart" onclick="startEncounter()">🎙️ Start Encounter</button>
+
+    <div class="sec">Recent Notes</div>
+    <div id="recentNotes"><div class="empty-state">Loading…</div></div>
+  </div>
+</div>
+
+
+<!-- ══ RECORDING ══ -->
+<div id="screen-rec" class="screen">
+  <div class="rec-hdr"><div class="rec-hdr-inner">
+    <button class="btn-back" onclick="goHome()">← Back</button>
+    <div style="position:relative;flex:1;margin-left:3vw">
+      <div id="visitPill" onclick="toggleEncounterMenu()" style="width:100%;cursor:pointer;background:rgba(255,255,255,0.18);border:0.4vw solid rgba(255,255,255,0.28);border-radius:5vw;padding:1.5vw 3vw;font-size:3vw;font-weight:600;color:#fff;text-align:center;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;gap:1vw">
+        <span id="visitPillText">Select type</span> <span style="font-size:2.5vw;opacity:0.7">&#9660;</span>
+      </div>
+      <div id="encounterMenu" style="display:none;position:absolute;top:110%;right:0;left:0;background:#fff;border-radius:2vw;box-shadow:0 2vw 6vw rgba(0,0,0,0.2);z-index:200;overflow:hidden">
+        <button class="enc-opt" onclick="changeEncounter('GYN - New Patient')">GYN - New Patient</button>
+        <button class="enc-opt" onclick="changeEncounter('GYN - Return Patient')">GYN - Return Patient</button>
+        <button class="enc-opt" onclick="changeEncounter('GYN - Procedure Visit')">GYN - Procedure Visit</button>
+        <button class="enc-opt" onclick="changeEncounter('OB - Return Prenatal')">OB - Return Prenatal</button>
+        <button class="enc-opt" onclick="changeEncounter('OB - New OB Visit')">OB - New Visit</button>
+        <button class="enc-opt" onclick="changeEncounter('OB - Postpartum')">OB - Postpartum</button>
+        <button class="enc-opt" onclick="changeEncounter('OB - Inpatient/Laborist')">OB - Inpatient / Laborist</button>
+      </div>
+    </div>
+  </div></div>
+  <div class="pt-strip" id="ptStrip"></div>
+  <div class="orb-wrap">
+    <div class="pring" id="p1" style="display:none"></div>
+    <div class="pring" id="p2" style="display:none"></div>
+    <div class="pring" id="p3" style="display:none"></div>
+    <div class="orb" id="recOrb" onclick="toggleListen()">🎙️</div>
+  </div>
+  <div class="timer" id="timer">00:00</div>
+  <div class="rec-status" id="recStat">Tap microphone to begin</div>
+  <div class="tx-wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2vw">
+      <div class="tx-label">Live Transcript</div>
+      <button onclick="toggleTx()" id="txToggleBtn" style="background:none;border:none;color:#9880cc;font-size:3vw;cursor:pointer;font-family:Inter,sans-serif;padding:0">Show transcript</button>
+    </div>
+    <div id="txBox" class="tx-scroll" style="display:none">
+      <span class="tx-ph" id="txPh">Transcription will appear here…</span><span id="txFin"></span><span class="tx-interim" id="txInt"></span>
+    </div>
+  </div>
+  <div id="recErr" class="err-full" style="margin:0 20px"></div>
+  <div class="rec-btns">
+    <button class="btn-out" id="btnPause" onclick="toggleListen()">🎙️ ▶</button>
+    <button class="btn-primary" id="btnGen" onclick="generateNote()" disabled>✦ Generate Note</button>
+  </div>
+  <button class="btn-clear" onclick="clearTx()">Clear transcript</button>
+</div>
+
+
+<!-- ══ PROCESSING ══ -->
+<div id="screen-proc" class="screen">
+  <div class="proc-spin">✦</div>
+  <div class="proc-title">Generating Note</div>
+  <div class="proc-steps">
+    <div class="proc-step"><span class="proc-dot">◈</span>De-identifying transcript</div>
+    <div class="proc-step"><span class="proc-dot">◈</span>Analyzing encounter</div>
+    <div class="proc-step"><span class="proc-dot">◈</span>Mapping MDM + billing codes</div>
+    <div class="proc-step"><span class="proc-dot">◈</span>Building dot phrase</div>
+  </div>
+</div>
+
+
+<!-- ══ RESULTS ══ -->
+<div id="screen-res" class="screen">
+  <div class="res-hdr"><div class="res-hdr-inner">
+    <div>
+      <div class="res-title">Note Ready</div>
+      <div class="res-sub" id="resSubLbl"></div>
+    </div>
+    <button class="btn-back" onclick="goHome()">+ New</button>
+  </div></div>
+  <div class="res-body">
+    <div class="em-card">
+      <div>
+        <div class="em-num" id="resEm">–</div>
+        <div class="em-desc" id="resEmDesc">–</div>
+      </div>
+      <div class="em-tags">
+        <div class="tag tag-r" id="resRisk">–</div>
+        <div class="tag tag-m" id="resMdm">–</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab on" onclick="switchTab('soap',this)">📋 SOAP</button>
+      <button class="tab" onclick="switchTab('mdm',this)">📊 MDM</button>
+      <button class="tab" onclick="switchTab('bill',this)">💰 Billing</button>
+      <button class="tab" onclick="switchTab('dot',this)">📝 Dot</button>
+    </div>
+
+    <!-- SOAP -->
+    <div class="panel on" id="panel-soap">
+      <div class="nblock"><div class="nblock-lbl">Chief Complaint</div><div class="nblock-body" id="rCC">–</div></div>
+      <div class="nblock"><div class="nblock-lbl">HPI</div><div class="nblock-body" id="rHPI">–</div></div>
+      <div class="nblock"><div class="nblock-lbl">Pertinent History</div><div class="nblock-body" id="rPMH">–</div></div>
+      <div class="nblock"><div class="nblock-lbl">Physical Exam</div><div class="nblock-body" id="rExam">–</div></div>
+      <div class="nblock"><div class="nblock-lbl">Assessment</div><div class="nblock-body" id="rAssess">–</div></div>
+      <div class="nblock"><div class="nblock-lbl">Plan</div><div class="nblock-body" id="rPlan">–</div></div>
+      <button class="btn-copy" id="copySoap" onclick="copySection('soap')">📋 Copy SOAP Note</button>
+    </div>
+
+    <!-- MDM -->
+    <div class="panel" id="panel-mdm">
+      <div class="mdm-grid">
+        <div class="mdm-row"><div class="mdm-k">Problems Addressed</div><div class="mdm-v" id="mProb">–</div></div>
+        <div class="mdm-row"><div class="mdm-k">Data Reviewed</div><div class="mdm-v" id="mData">–</div></div>
+        <div class="mdm-row"><div class="mdm-k">Risk Level</div><div class="mdm-v" id="mRisk">–</div></div>
+        <div class="mdm-row"><div class="mdm-k">Overall MDM</div><div class="mdm-v" id="mOverall">–</div></div>
+      </div>
+      <div class="nblock"><div class="nblock-lbl">Justification</div><div class="nblock-body" id="mJust">–</div></div>
+      <div class="phi-box" id="phiBox" style="display:none">
+        <div class="phi-title">⚠️ PHI Detected</div>
+        <div id="phiList"></div>
+      </div>
+    </div>
+
+    <!-- BILLING -->
+    <div class="panel" id="panel-bill">
+      <div class="sec">CPT Codes</div>
+      <div id="cptList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="sec">ICD-10 Codes</div>
+      <div id="icdList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="sec">💡 Billing Tips</div>
+      <div id="tipList" style="display:flex;flex-direction:column;gap:6px"></div>
+      <button class="btn-copy" id="copyBill" onclick="copySection('bill')">📋 Copy Billing Summary</button>
+    </div>
+
+    <!-- DOT PHRASE -->
+    <div class="panel" id="panel-dot">
+      <div class="dot-box"><pre class="dot-txt" id="dotTxt">–</pre></div>
+      <button class="btn-copy" id="copyDot" onclick="copySection('dot')">📋 Copy Dot Phrase</button>
+    </div>
+
+    <hr class="divider">
+    <div id="driveResult"></div>
+    <button class="btn-drive" onclick="saveToDrive()">☁️ Save to Google Drive</button>
+  </div>
+</div>
+
+<script>
+// -- CONFIG - paste your GAS deployment URL here --------------
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbyOmjpv9tdYnukswIOXH1504a1F8PMI2D8kekSKLG_FUsyilcdYrtN6IX-B8ye9VN8ujA/exec';
+// Example: 'https://script.google.com/macros/s/AKfyc.../exec'
+// -------------------------------------------------------------
+
+var S={visitType:null,transcript:'',note:null,listening:false,paused:false,duration:0,tmr:null,rec:null};
+
+// GAS API helpers
+function gasGet(action){
+  return fetch(GAS_URL+'?action='+action).then(function(r){return r.json();});
+}
+function gasPost(action,data){
+  return fetch(GAS_URL,{
+    method:'POST',
+    body:JSON.stringify(Object.assign({action:action},data))
+  }).then(function(r){return r.json();});
+}
+
+window.onload=function(){
+  document.getElementById('visitDate').value=new Date().toISOString().split('T')[0];
+  gasGet('getUserInfo').then(function(u){
+    document.getElementById('userEmail').textContent=u.email||'Signed in';
+  }).catch(function(){document.getElementById('userEmail').textContent='Signed in';});
+  gasGet('getRecentNotes').then(renderRecent).catch(function(){});
+  initVcards();
+  initDobFormat();
+};
+
+function renderRecent(notes){
+  var el=document.getElementById('recentNotes');
+  if(!notes||!notes.length){el.innerHTML='<div class="empty-state">No notes yet</div>';return;}
+  el.innerHTML=notes.map(function(n){return '<a href="'+n.url+'" target="_blank" class="rnote"><div><div class="rnote-title">'+n.title+'</div><div class="rnote-date">'+n.date+'</div></div><span class="rnote-arr"> </span></a>';}).join('');
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('screen-'+id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function goHome(){
+  hardStop();S.transcript='';S.duration=0;S.note=null;
+  document.getElementById('txFin').textContent='';
+  document.getElementById('txInt').textContent='';
+  document.getElementById('txPh').style.display='';
+  document.getElementById('timer').textContent='00:00';
+  document.getElementById('driveResult').innerHTML='';
+  document.getElementById('homeErr').style.display='none';
+  showScreen('home');
+  gasGet('getRecentNotes').then(renderRecent).catch(function(){});
+}
+
+function startEncounter(){
+  var name=document.getElementById('patientName').value.trim();
+  var mrn=document.getElementById('mrn').value.trim();
+  var dob=document.getElementById('dob').value;
+  var vd=document.getElementById('visitDate').value;
+  var err=document.getElementById('homeErr');
+  if(!name||!mrn||!vd||!S.visitType){
+    err.style.display='block';
+    err.textContent='Please fill in Name, MRN, Visit Date and select a visit type.';
+    return;
+  }
+  err.style.display='none';
+  document.getElementById('visitPillText').textContent=S.visitType;
+  document.getElementById('ptStrip').innerHTML=
+    '<span class="pt-tag">  '+name+'</span>'+
+    '<span class="pt-tag">MRN: '+mrn+'</span>'+
+    '<span class="pt-tag">DOB: '+dob+'</span>'+
+    '<span class="pt-tag">  '+vd+'</span>';
+  showScreen('rec');
+}
+
+function startListen(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){showErr('recErr','Speech recognition not supported. Use Chrome on Android.');return;}
+
+  // If already running, just unpause - never restart to avoid notification chime
+  if(S.rec && S.listening){
+    S.paused=false;
+    document.getElementById('recOrb').classList.add('on');
+    ['p1','p2','p3'].forEach(function(id){document.getElementById(id).style.display='block';});
+    document.getElementById('recStat').textContent='Listening - speak naturally';
+    document.getElementById('btnPause').textContent='🎙️ ⏸';
+    document.getElementById('recErr').style.display='none';
+    clearInterval(S.tmr);
+    S.tmr=setInterval(function(){
+      S.duration++;
+      var m=Math.floor(S.duration/60).toString().padStart(2,'0');
+      var s=(S.duration%60).toString().padStart(2,'0');
+      document.getElementById('timer').textContent=m+':'+s;
+    },1000);
+    return;
+  }
+
+  // First time only - request permission then start recognizer once, never stop it
+  navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+    stream.getTracks().forEach(function(t){t.stop();});
+    var r=new SR();r.continuous=true;r.interimResults=true;r.lang='en-US';
+    r.onresult=function(e){
+      if(S.paused)return;
+      var fin='',int='';
+      for(var i=e.resultIndex;i<e.results.length;i++){
+        if(e.results[i].isFinal)fin+=e.results[i][0].transcript+' ';
+        else int+=e.results[i][0].transcript;
+      }
+      if(fin){
+        S.transcript+=fin;
+        document.getElementById('txFin').textContent=S.transcript;
+        document.getElementById('txPh').style.display='none';
+      }
+      document.getElementById('txInt').textContent=int;
+      var b=document.getElementById('txBox');b.scrollTop=b.scrollHeight;
+      document.getElementById('btnGen').disabled=S.transcript.length<20;
+    };
+    r.onsoundstart=function(){};
+    r.onerror=function(e){
+      if(e.error==='aborted'||e.error==='no-speech')return;
+      showErr('recErr','Mic error: '+e.error);
+    };
+    r.onend=function(){if(S.listening)r.start();};
+    S.rec=r;S.listening=true;S.paused=false;
+    r.start();
+    document.getElementById('recOrb').classList.add('on');
+    ['p1','p2','p3'].forEach(function(id){document.getElementById(id).style.display='block';});
+    document.getElementById('recStat').textContent='Listening - speak naturally';
+    document.getElementById('btnPause').textContent='🎙️ ⏸';
+    document.getElementById('recErr').style.display='none';
+    clearInterval(S.tmr);
+    S.tmr=setInterval(function(){
+      S.duration++;
+      var m=Math.floor(S.duration/60).toString().padStart(2,'0');
+      var s=(S.duration%60).toString().padStart(2,'0');
+      document.getElementById('timer').textContent=m+':'+s;
+    },1000);
+  }).catch(function(err){
+    showErr('recErr','Microphone access denied. Please allow mic in your browser settings.');
+  });
+}
+
+function stopListen(){
+  S.paused=true;
+  clearInterval(S.tmr);
+  document.getElementById('recOrb').classList.remove('on');
+  ['p1','p2','p3'].forEach(function(id){document.getElementById(id).style.display='none';});
+  document.getElementById('recStat').textContent='Paused - tap to resume';
+  document.getElementById('btnPause').textContent='🎙️ ▶';
+  document.getElementById('txInt').textContent='';
+  document.getElementById('recErr').style.display='none';
+}
+
+function hardStop(){
+  if(S.rec){try{S.rec.stop();}catch(e){}}
+  S.rec=null;S.listening=false;S.paused=false;
+  clearInterval(S.tmr);
+}
+function toggleListen(){if(S.paused||!S.listening)startListen();else stopListen();}
+
+function clearTx(){
+  S.transcript='';S.duration=0;
+  document.getElementById('txFin').textContent='';
+  document.getElementById('txInt').textContent='';
+  document.getElementById('txPh').style.display='';
+  document.getElementById('timer').textContent='00:00';
+  document.getElementById('btnGen').disabled=true;
+}
+
+function generateNote(){
+  if(S.transcript.length<20)return;
+  stopListen();showScreen('proc');
+  var age=document.getElementById('patientAge').value;
+  var gest=document.getElementById('gestWeeks').value;
+  gasPost('callClaude',{transcript:S.transcript,visitType:S.visitType,patientAge:age,gestWeeks:gest})
+    .then(function(resp){
+      if(resp.success){S.note=resp.data;fillResults(resp.data);showScreen('res');}
+      else{showErr('recErr','Error: '+resp.error);showScreen('rec');}
+    })
+    .catch(function(e){showErr('recErr','Error: '+e.message);showScreen('rec');});
+}
+
+function fillResults(n){
+  document.getElementById('resSubLbl').textContent=S.visitType;
+  document.getElementById('resEm').textContent=n.emLevel||'-';
+  document.getElementById('resEmDesc').textContent=(n.mdm&&n.mdm.overallMdmLevel||'-')+' MDM';
+  document.getElementById('resRisk').textContent='Risk: '+(n.mdm&&n.mdm.riskLevel||'-');
+  document.getElementById('resMdm').textContent='MDM: '+(n.mdm&&n.mdm.overallMdmLevel||'-');
+  document.getElementById('rCC').textContent=n.chiefComplaint||'-';
+  document.getElementById('rHPI').textContent=n.hpi||'-';
+  document.getElementById('rPMH').textContent=n.pertinentHistory||'-';
+  document.getElementById('rExam').textContent=n.physicalExam||'-';
+  document.getElementById('rAssess').textContent=n.assessment||'-';
+  document.getElementById('rPlan').textContent=n.plan||'-';
+  document.getElementById('mProb').textContent=(n.mdm&&n.mdm.problemsAddressed)||'-';
+  document.getElementById('mData').textContent=(n.mdm&&n.mdm.dataReviewed)||'-';
+  document.getElementById('mRisk').textContent=(n.mdm&&n.mdm.riskLevel)||'-';
+  document.getElementById('mOverall').textContent=(n.mdm&&n.mdm.overallMdmLevel)||'-';
+  document.getElementById('mJust').textContent=(n.mdm&&n.mdm.justification)||'-';
+  if(n.hipaaFlags&&n.hipaaFlags.length){
+    document.getElementById('phiBox').style.display='block';
+    document.getElementById('phiList').innerHTML=n.hipaaFlags.map(function(f){return '<div class="phi-item">  '+f+'</div>';}).join('');
+  }
+  document.getElementById('cptList').innerHTML=(n.suggestedCpt||[]).map(function(c){return '<div class="chip">'+c+'</div>';}).join('');
+  document.getElementById('icdList').innerHTML=(n.suggestedIcd10||[]).map(function(c){return '<div class="chip">'+c+'</div>';}).join('');
+  document.getElementById('tipList').innerHTML=(n.billingTips||[]).map(function(t){return '<div class="tip">'+t+'</div>';}).join('');
+  document.getElementById('dotTxt').textContent=n.dotPhrase||'-';
+}
+
+function switchTab(id,btn){
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('on');});
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('on');});
+  document.getElementById('panel-'+id).classList.add('on');btn.classList.add('on');
+}
+
+function copySection(sec){
+  var n=S.note,text='',btnId='';
+  if(sec==='soap'){text=[n.chiefComplaint,n.hpi,n.pertinentHistory,n.physicalExam,n.assessment,n.plan].filter(Boolean).join('\n\n');btnId='copySoap';}
+  else if(sec==='bill'){text='E/M: '+n.emLevel+'\nCPT: '+(n.suggestedCpt||[]).join(', ')+'\nICD-10: '+(n.suggestedIcd10||[]).join(', ');btnId='copyBill';}
+  else if(sec==='dot'){text=n.dotPhrase||'';btnId='copyDot';}
+  navigator.clipboard.writeText(text).then(function(){
+    var btn=document.getElementById(btnId),orig=btn.textContent;
+    btn.textContent='  Copied!';btn.classList.add('done');
+    setTimeout(function(){btn.textContent=orig;btn.classList.remove('done');},2000);
+  });
+}
+
+function saveToDrive(){
+  var payload={patientName:document.getElementById('patientName').value,mrn:document.getElementById('mrn').value,dob:document.getElementById('dob').value,visitDate:document.getElementById('visitDate').value,visitType:S.visitType,gestWeeks:'',note:S.note};
+  document.getElementById('driveResult').innerHTML='<div style="font-size:3.5vw;color:#9880cc;text-align:center;padding:3vw">Saving to Drive </div>';
+  gasPost('saveNoteToDrive',{payload:payload})
+    .then(function(r){
+      if(r.success)document.getElementById('driveResult').innerHTML='<a href="'+r.docUrl+'" target="_blank" class="drive-saved"><span>  '+r.docTitle+'</span><span style="font-size:5vw"> </span></a>';
+      else document.getElementById('driveResult').innerHTML='<div class="err-full" style="display:block">Save failed: '+r.error+'</div>';
+    })
+    .catch(function(e){document.getElementById('driveResult').innerHTML='<div class="err-full" style="display:block">Save failed: '+e.message+'</div>';});
+}
+
+function showErr(id,msg){var e=document.getElementById(id);e.style.display='block';e.textContent=msg;}
+
+function toggleEncounterMenu(){
+  var m=document.getElementById('encounterMenu');
+  m.style.display=m.style.display==='none'?'block':'none';
+}
+function changeEncounter(type){
+  S.visitType=type;
+  document.getElementById('visitPillText').textContent=type;
+  document.getElementById('encounterMenu').style.display='none';
+}
+
+function toggleTx(){
+  var box=document.getElementById('txBox');
+  var btn=document.getElementById('txToggleBtn');
+  if(box.style.display==='none'){
+    box.style.display='';
+    btn.textContent='Hide transcript';
+  } else {
+    box.style.display='none';
+    btn.textContent='Show transcript';
+  }
+}
+
+function formatDob(el){
+  var v=el.value.replace(/[^0-9]/g,'');
+  if(v.length>4) v=v.slice(0,2)+'/'+v.slice(2,4)+'/'+v.slice(4,8);
+  else if(v.length>2) v=v.slice(0,2)+'/'+v.slice(2);
+  el.value=v;
+}
+function dobBackspace(e,el){
+  if(e.key==='Backspace'&&el.value.slice(-1)==='/'){
+    e.preventDefault();
+    el.value=el.value.slice(0,-1);
+  }
+}
+function initDobFormat(){ /* handled by oninput on element */ }
+
+function selectVisit(btn){
+  document.querySelectorAll('.vcard').forEach(function(x){x.classList.remove('sel');});
+  btn.classList.add('sel');
+  S.visitType=btn.dataset.val;
+}
+
+function initVcards(){
+  // onclick handlers on each button handle selection directly
+}
+
+</script>
+</body>
